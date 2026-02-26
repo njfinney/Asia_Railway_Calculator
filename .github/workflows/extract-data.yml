@@ -1,51 +1,145 @@
 name: Extract Railway Data
 
-# Run monthly or manually from the Actions tab
 on:
   schedule:
-    - cron: '0 3 1 * *'  # 3am UTC on the 1st of each month
-  workflow_dispatch:       # Manual trigger button in GitHub Actions UI
+    - cron: '0 3 1 * *'
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  extract:
+  # ── Small countries: Bulgaria, Azerbaijan, Turkmenistan, Afghanistan ──
+  extract-small:
     runs-on: ubuntu-latest
-    timeout-minutes: 120   # Railway extraction can take a while
-
+    timeout-minutes: 30
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Extract stations (small)
+        run: node data-extractor/extract.js stations bulgaria azerbaijan turkmenistan afghanistan
+      - name: Extract railways (small)
+        run: node data-extractor/extract.js railways bulgaria azerbaijan turkmenistan afghanistan
+      - uses: actions/upload-artifact@v4
         with:
-          node-version: '20'
+          name: data-small
+          path: data/
 
-      - name: Run extraction script
-        run: node data-extractor/extract.js
-        env:
-          NODE_OPTIONS: '--max-old-space-size=4096'
+  # ── Medium countries: Romania, Uzbekistan, Turkey ──
+  extract-medium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Extract stations (medium)
+        run: node data-extractor/extract.js stations romania uzbekistan turkey
+      - name: Extract railways (medium)
+        run: node data-extractor/extract.js railways romania uzbekistan turkey
+      - uses: actions/upload-artifact@v4
+        with:
+          name: data-medium
+          path: data/
 
-      - name: Check for changes
-        id: changes
+  # ── Large countries: Iran, Pakistan, Ukraine, Kazakhstan ──
+  extract-large:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Extract stations (large)
+        run: node data-extractor/extract.js stations iran pakistan ukraine kazakhstan
+      - name: Extract railways (large)
+        run: node data-extractor/extract.js railways iran pakistan ukraine kazakhstan
+      - uses: actions/upload-artifact@v4
+        with:
+          name: data-large
+          path: data/
+
+  # ── XL country: Russia ──
+  extract-russia:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Extract stations (Russia)
+        run: node data-extractor/extract.js stations russia
+      - name: Extract railways (Russia)
+        run: node data-extractor/extract.js railways russia
+      - uses: actions/upload-artifact@v4
+        with:
+          name: data-russia
+          path: data/
+
+  # ── Merge all artifacts and commit ──
+  commit-data:
+    needs: [extract-small, extract-medium, extract-large, extract-russia]
+    if: always() && (needs.extract-small.result == 'success' || needs.extract-medium.result == 'success' || needs.extract-large.result == 'success' || needs.extract-russia.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download small data
+        if: needs.extract-small.result == 'success'
+        uses: actions/download-artifact@v4
+        with: { name: data-small, path: data/ }
+
+      - name: Download medium data
+        if: needs.extract-medium.result == 'success'
+        uses: actions/download-artifact@v4
+        with: { name: data-medium, path: data/ }
+
+      - name: Download large data
+        if: needs.extract-large.result == 'success'
+        uses: actions/download-artifact@v4
+        with: { name: data-large, path: data/ }
+
+      - name: Download Russia data
+        if: needs.extract-russia.result == 'success'
+        uses: actions/download-artifact@v4
+        with: { name: data-russia, path: data/ }
+
+      - name: Merge manifests
         run: |
-          git add data/
-          if git diff --staged --quiet; then
-            echo "changed=false" >> $GITHUB_OUTPUT
-            echo "No data changes detected"
-          else
-            echo "changed=true" >> $GITHUB_OUTPUT
-            echo "Data changes detected:"
-            git diff --staged --stat
-          fi
+          node -e "
+          const fs = require('fs');
+          const glob = require('path');
+          // Find all manifest.json files and merge
+          const merged = { generated: new Date().toISOString(), countries: {} };
+          const files = fs.readdirSync('data').filter(f => f === 'manifest.json');
+          for (const f of files) {
+            try {
+              const m = JSON.parse(fs.readFileSync('data/' + f, 'utf8'));
+              Object.assign(merged.countries, m.countries || {});
+            } catch(e) {}
+          }
+          fs.writeFileSync('data/manifest.json', JSON.stringify(merged, null, 2));
+          console.log('Merged manifest:', Object.keys(merged.countries).length, 'countries');
+          "
+
+      - name: List data files
+        run: |
+          echo "=== Data files ==="
+          find data/ -type f | sort
+          echo ""
+          echo "=== Manifest ==="
+          cat data/manifest.json
 
       - name: Commit and push
-        if: steps.changes.outputs.changed == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/
-          git commit -m "Update railway data $(date -u +%Y-%m-%d)"
-          git push
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update railway data $(date -u +%Y-%m-%d)"
+            git push
+          fi
