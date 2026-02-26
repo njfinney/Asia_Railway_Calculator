@@ -643,7 +643,8 @@
             pickerMap: null,
             pickerStationNum: null,
             towns: [],
-            currentRegion: null
+            currentRegion: null,
+            staticRailwayKeys: []
         };
 
         const REGIONS = {
@@ -746,6 +747,33 @@
             'https://overpass.kumi.systems/api/interpreter'
         ];
 
+        // Static data hosted on GitHub Pages (or relative path)
+        // Update this to your GitHub Pages URL after running the extraction script
+        const STATIC_DATA_BASE = './data';
+        let STATIC_MANIFEST = null;
+
+        async function loadManifest() {
+            if (STATIC_MANIFEST) return STATIC_MANIFEST;
+            try {
+                const resp = await fetch(`${STATIC_DATA_BASE}/manifest.json`);
+                if (resp.ok) {
+                    STATIC_MANIFEST = await resp.json();
+                    log(`📦 Static data available (generated ${STATIC_MANIFEST.generated})`, 'success');
+                    return STATIC_MANIFEST;
+                }
+            } catch (e) {}
+            log('📡 No static data found — will use Overpass API directly', 'info');
+            return null;
+        }
+
+        async function loadStaticJSON(subpath) {
+            try {
+                const resp = await fetch(`${STATIC_DATA_BASE}/${subpath}`);
+                if (resp.ok) return await resp.json();
+            } catch (e) {}
+            return null;
+        }
+
         async function queryOverpass(query, retries = 2) {
             for (const endpoint of OVERPASS_ENDPOINTS) {
                 for (let attempt = 0; attempt <= retries; attempt++) {
@@ -784,6 +812,7 @@
             let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
             let allSingleCountries = true;
             let countryNames = [];
+            let countryKeys = [];
 
             for (const key of selectedOptions) {
                 const region = REGIONS[key];
@@ -795,15 +824,22 @@
                 maxLon = Math.max(maxLon, e);
                 if (region.singleCountry) {
                     countryNames.push(region.name);
+                    countryKeys.push(key);
                 } else {
                     allSingleCountries = false;
+                    if (key === 'corridor-middle') {
+                        countryKeys.push('turkey', 'azerbaijan', 'russia', 'kazakhstan', 'uzbekistan', 'turkmenistan');
+                    } else if (key === 'corridor-south') {
+                        countryKeys.push('turkey', 'iran', 'afghanistan', 'pakistan', 'turkmenistan');
+                    } else if (key === 'all-regions') {
+                        countryKeys.push(...Object.keys(REGIONS).filter(k => REGIONS[k].singleCountry));
+                    }
                 }
             }
+            countryKeys = [...new Set(countryKeys)];
 
-            // Russia is enormous — if selected alone or as part of a combo, limit to the European/Central Asian rail-dense area
-            // to avoid overloading Overpass API
             if (maxLon > 100) {
-                log('⚠️ Capping eastern longitude to 100° for performance (covers Central Asia rail network)', 'info');
+                log('⚠️ Capping eastern longitude to 100° for performance', 'info');
                 maxLon = 100;
             }
 
@@ -816,104 +852,125 @@
 
             try {
                 log(`Loading ${regionLabel} (${selectedOptions.join(', ')})`);
-                const bbox = combinedBbox.join(',');
 
                 const singleCountryMode = allSingleCountries && selectedOptions.length > 0;
-                if (singleCountryMode) {
-                    log(`Multi-country mode: ${countryNames.join(', ')}`, 'success');
-                }
 
-                // Load towns
-                try {
-                    const townQuery = `[out:json][timeout:60][bbox:${bbox}];
-(
-  node["place"~"city|town"];
-);
-out;`;
-                    const townResp = await queryOverpass(townQuery);
-                    if (townResp.ok) {
-                        const townData = await townResp.json();
-                        STATE.towns = townData.elements.map(t => ({ lat: t.lat, lon: t.lon, name: t.tags?.name }));
-                        log(`Found ${STATE.towns.length} towns`);
-                    }
-                } catch (e) { log('Town loading failed'); }
+                // ===== TRY STATIC DATA FIRST =====
+                const manifest = await loadManifest();
+                let staticStationsLoaded = false;
 
-                // Load stations
-                const stationQuery = `[out:json][timeout:180][bbox:${bbox}];
-(
-  node["railway"~"station|halt|stop|service_station"];
-  way["railway"~"station|halt|service_station"];
-  node["public_transport"="station"]["train"="yes"];
-  way["public_transport"="station"];
-  way["building"="train_station"];
-  node["name"~"[Ss]tation|[Vv]okzal|[Gg]ar|İstasyon|ایستگاه|вокзал|станция"];
-);
-out center tags;`;
-                const stationResp = await queryOverpass(stationQuery);
+                if (manifest) {
+                    const availableKeys = countryKeys.filter(k => manifest.countries[k] && !manifest.countries[k].error);
 
-                if (!stationResp.ok) throw new Error(`HTTP ${stationResp.status}`);
-                const data = await stationResp.json();
-                log(`✅ Received ${data.elements?.length || 0} elements`, 'success');
-                if (!data.elements || data.elements.length === 0) throw new Error('No stations found');
+                    if (availableKeys.length > 0) {
+                        log(`📦 Loading static data for: ${availableKeys.join(', ')}`, 'success');
 
-                const stationMap = new Map();
-                for (const el of data.elements) {
-                    const lat = el.type === 'way' ? el.center?.lat : el.lat;
-                    const lon = el.type === 'way' ? el.center?.lon : el.lon;
-                    if (!lat || !lon) continue;
-
-                    if (el.tags?.building === 'train_station' && STATE.towns.length > 0 && !isNearTown(lat, lon, STATE.towns, 10)) continue;
-
-                    let name = el.tags?.name || el.tags?.['name:en'] || el.tags?.ref;
-
-                    if (!name) {
-                        let closestTown = null;
-                        let minTownDist = Infinity;
-                        for (const town of STATE.towns) {
-                            const d = haversine(lat, lon, town.lat, town.lon);
-                            if (d < minTownDist && d < 5) {
-                                minTownDist = d;
-                                closestTown = town;
-                            }
-                        }
-                        if (closestTown && closestTown.name) {
-                            name = `${closestTown.name} Station`;
-                            log(`Renamed unnamed station to: ${name}`);
-                        } else {
-                            name = `Unnamed (${el.type} ${el.id})`;
-                        }
-                    }
-
-                    const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
-
-                    if (!stationMap.has(key) || name.toLowerCase().match(/station|vokzal|gar|istasyon|ایستگاه|вокзал|станция/)) {
-                        let country;
-                        if (singleCountryMode) {
-                            country = null;
-                            for (const regionKey of selectedOptions) {
-                                const region = REGIONS[regionKey];
-                                if (!region || !region.singleCountry) continue;
-                                const [s, w, n, e] = region.bbox;
-                                if (lat >= s && lat <= n && lon >= w && lon <= e) {
-                                    country = region.name;
-                                    break;
+                        const allStaticStations = [];
+                        for (const key of availableKeys) {
+                            const stations = await loadStaticJSON(`stations/${key}.json`);
+                            if (stations) {
+                                const countryName = REGIONS[key]?.name || manifest.countries[key].name;
+                                for (const s of stations) {
+                                    s.country = countryName;
+                                    s.displayName = `${s.name} (${countryName})`;
+                                    s.tags = s.tags || {};
+                                    s.railwayType = s.type || 'station';
                                 }
+                                allStaticStations.push(...stations);
+                                log(`  ${countryName}: ${stations.length} stations`, 'success');
                             }
-                            if (!country) country = getCountryFromData(el.tags || {}, lat, lon, null);
-                        } else {
-                            country = getCountryFromData(el.tags || {}, lat, lon, null);
                         }
 
-                        stationMap.set(key, {
-                            id: el.id, type: el.type, lat, lon, name, country,
-                            tags: el.tags || {}, railwayType: el.tags?.railway || 'station',
-                            displayName: `${name} (${country})`
-                        });
+                        if (allStaticStations.length > 0) {
+                            STATE.stations = allStaticStations.sort((a, b) => a.name.localeCompare(b.name));
+                            staticStationsLoaded = true;
+                            log(`✅ ${STATE.stations.length} stations loaded from static data`, 'success');
+                        }
+
+                        // Cache which country keys have static railway data
+                        STATE.staticRailwayKeys = availableKeys;
+                    }
+
+                    const missingKeys = countryKeys.filter(k => !manifest.countries[k] || manifest.countries[k].error);
+                    if (missingKeys.length > 0) {
+                        log(`📡 No static data for: ${missingKeys.join(', ')} — will use Overpass`, 'info');
                     }
                 }
 
-                STATE.stations = Array.from(stationMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-                log(`✅ ${STATE.stations.length} stations processed`, 'success');
+                // ===== FALLBACK: OVERPASS FOR STATIONS =====
+                if (!staticStationsLoaded) {
+                    log('📡 Loading stations from Overpass API...', 'info');
+                    const bbox = combinedBbox.join(',');
+
+                    try {
+                        const townQuery = `[out:json][timeout:60][bbox:${bbox}];\n(\n  node["place"~"city|town"];\n);\nout;`;
+                        const townResp = await queryOverpass(townQuery);
+                        if (townResp.ok) {
+                            const townData = await townResp.json();
+                            STATE.towns = townData.elements.map(t => ({ lat: t.lat, lon: t.lon, name: t.tags?.name }));
+                            log(`Found ${STATE.towns.length} towns`);
+                        }
+                    } catch (e) { log('Town loading failed'); }
+
+                    const stationQuery = `[out:json][timeout:180][bbox:${bbox}];\n(\n  node["railway"~"station|halt|stop|service_station"];\n  way["railway"~"station|halt|service_station"];\n  node["public_transport"="station"]["train"="yes"];\n  way["public_transport"="station"];\n  way["building"="train_station"];\n  node["name"~"[Ss]tation|[Vv]okzal|[Gg]ar|İstasyon|ایستگاه|вокзал|станция"];\n);\nout center tags;`;
+                    const stationResp = await queryOverpass(stationQuery);
+
+                    if (!stationResp.ok) throw new Error(`HTTP ${stationResp.status}`);
+                    const data = await stationResp.json();
+                    log(`✅ Received ${data.elements?.length || 0} elements`, 'success');
+                    if (!data.elements || data.elements.length === 0) throw new Error('No stations found');
+
+                    const stationMap = new Map();
+                    for (const el of data.elements) {
+                        const lat = el.type === 'way' ? el.center?.lat : el.lat;
+                        const lon = el.type === 'way' ? el.center?.lon : el.lon;
+                        if (!lat || !lon) continue;
+
+                        if (el.tags?.building === 'train_station' && STATE.towns.length > 0 && !isNearTown(lat, lon, STATE.towns, 10)) continue;
+
+                        let name = el.tags?.name || el.tags?.['name:en'] || el.tags?.ref;
+
+                        if (!name) {
+                            let closestTown = null, minTownDist = Infinity;
+                            for (const town of STATE.towns) {
+                                const d = haversine(lat, lon, town.lat, town.lon);
+                                if (d < minTownDist && d < 5) { minTownDist = d; closestTown = town; }
+                            }
+                            if (closestTown && closestTown.name) {
+                                name = `${closestTown.name} Station`;
+                            } else {
+                                name = `Unnamed (${el.type} ${el.id})`;
+                            }
+                        }
+
+                        const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+
+                        if (!stationMap.has(key) || name.toLowerCase().match(/station|vokzal|gar|istasyon|ایستگاه|вокзал|станция/)) {
+                            let country;
+                            if (singleCountryMode) {
+                                country = null;
+                                for (const regionKey of selectedOptions) {
+                                    const region = REGIONS[regionKey];
+                                    if (!region || !region.singleCountry) continue;
+                                    const [s, w, n, e] = region.bbox;
+                                    if (lat >= s && lat <= n && lon >= w && lon <= e) { country = region.name; break; }
+                                }
+                                if (!country) country = getCountryFromData(el.tags || {}, lat, lon, null);
+                            } else {
+                                country = getCountryFromData(el.tags || {}, lat, lon, null);
+                            }
+
+                            stationMap.set(key, {
+                                id: el.id, type: el.type, lat, lon, name, country,
+                                tags: el.tags || {}, railwayType: el.tags?.railway || 'station',
+                                displayName: `${name} (${country})`
+                            });
+                        }
+                    }
+
+                    STATE.stations = Array.from(stationMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+                    log(`✅ ${STATE.stations.length} stations from Overpass`, 'success');
+                }
 
                 const counts = {};
                 STATE.stations.forEach(s => counts[s.country] = (counts[s.country] || 0) + 1);
@@ -931,6 +988,7 @@ out center tags;`;
                 hideStatus();
             }
         }
+
 
         function populateCountryFilters() {
             const countries = [...new Set(STATE.stations.map(s => s.country))].filter(c => c !== 'Unknown').sort();
@@ -1005,11 +1063,58 @@ out center tags;`;
 
         function closeMapPicker() { document.getElementById('map-picker-modal').style.display = 'none'; }
 
+        // ===== BINARY MIN-HEAP for efficient Dijkstra =====
+        class MinHeap {
+            constructor() { this.heap = []; }
+            
+            push(node, priority) {
+                this.heap.push({ node, priority });
+                this._bubbleUp(this.heap.length - 1);
+            }
+            
+            pop() {
+                if (this.heap.length === 0) return null;
+                const top = this.heap[0];
+                const last = this.heap.pop();
+                if (this.heap.length > 0) {
+                    this.heap[0] = last;
+                    this._sinkDown(0);
+                }
+                return top;
+            }
+            
+            get size() { return this.heap.length; }
+            
+            _bubbleUp(i) {
+                while (i > 0) {
+                    const parent = (i - 1) >> 1;
+                    if (this.heap[i].priority >= this.heap[parent].priority) break;
+                    [this.heap[i], this.heap[parent]] = [this.heap[parent], this.heap[i]];
+                    i = parent;
+                }
+            }
+            
+            _sinkDown(i) {
+                const n = this.heap.length;
+                while (true) {
+                    let smallest = i;
+                    const left = 2 * i + 1, right = 2 * i + 2;
+                    if (left < n && this.heap[left].priority < this.heap[smallest].priority) smallest = left;
+                    if (right < n && this.heap[right].priority < this.heap[smallest].priority) smallest = right;
+                    if (smallest === i) break;
+                    [this.heap[i], this.heap[smallest]] = [this.heap[smallest], this.heap[i]];
+                    i = smallest;
+                }
+            }
+        }
+
         function buildRailwayGraph(railways) {
             const graph = { nodes: new Map(), nodeIndex: new Map() };
             let id = 0;
+            
+            // Use reduced precision (5 decimal places ≈ 1.1m) to merge nearby nodes
             function getNode(lat, lon) {
-                const key = `${lat.toFixed(6)},${lon.toFixed(6)}`;
+                const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
                 if (graph.nodeIndex.has(key)) return graph.nodeIndex.get(key);
                 const nodeId = id++;
                 graph.nodes.set(nodeId, { lat, lon, edges: [] });
@@ -1021,6 +1126,7 @@ out center tags;`;
                 for (let i = 0; i < w.geometry.length - 1; i++) {
                     const p1 = w.geometry[i], p2 = w.geometry[i + 1];
                     const n1 = getNode(p1.lat, p1.lon), n2 = getNode(p2.lat, p2.lon);
+                    if (n1 === n2) continue; // skip zero-length edges from merging
                     const d = haversine(p1.lat, p1.lon, p2.lat, p2.lon);
                     graph.nodes.get(n1).edges.push({ to: n2, distance: d });
                     graph.nodes.get(n2).edges.push({ to: n1, distance: d });
@@ -1029,64 +1135,85 @@ out center tags;`;
             return graph;
         }
 
-        function findShortestPath(graph, sLat, sLon, eLat, eLon) {
-            let sNode = null, eNode = null, sDist = Infinity, eDist = Infinity;
+        function findNearestNode(graph, lat, lon, maxDist = 10) {
+            let bestId = null, bestDist = Infinity;
             for (const [id, n] of graph.nodes) {
-                const ds = haversine(sLat, sLon, n.lat, n.lon), de = haversine(eLat, eLon, n.lat, n.lon);
-                if (ds < sDist) { sDist = ds; sNode = id; }
-                if (de < eDist) { eDist = de; eNode = id; }
+                // Quick lat/lon filter before expensive haversine (~1° ≈ 111km)
+                if (Math.abs(n.lat - lat) > 0.1 || Math.abs(n.lon - lon) > 0.15) continue;
+                const d = haversine(lat, lon, n.lat, n.lon);
+                if (d < bestDist) { bestDist = d; bestId = id; }
             }
-            if (!sNode || !eNode) throw new Error('No railway nodes near stations');
+            // If quick filter missed, do full scan
+            if (bestId === null) {
+                for (const [id, n] of graph.nodes) {
+                    const d = haversine(lat, lon, n.lat, n.lon);
+                    if (d < bestDist && d < maxDist) { bestDist = d; bestId = id; }
+                }
+            }
+            return { id: bestId, dist: bestDist };
+        }
+
+        function findShortestPath(graph, sLat, sLon, eLat, eLon) {
+            const sResult = findNearestNode(graph, sLat, sLon);
+            const eResult = findNearestNode(graph, eLat, eLon);
+            const sNode = sResult.id, eNode = eResult.id;
+            const sDist = sResult.dist, eDist = eResult.dist;
+            
+            if (sNode === null || eNode === null) throw new Error('No railway nodes near stations');
 
             log(`Closest railway nodes: start=${sNode} (${sDist.toFixed(3)}km away), end=${eNode} (${eDist.toFixed(3)}km away)`);
 
-            const dist = new Map(), prev = new Map(), unvis = new Set(graph.nodes.keys());
-            for (const id of graph.nodes.keys()) dist.set(id, Infinity);
+            // Dijkstra with binary min-heap — O((V+E) log V) instead of O(V²)
+            const dist = new Map();
+            const prev = new Map();
+            const visited = new Set();
+            const heap = new MinHeap();
+
             dist.set(sNode, 0);
+            heap.push(sNode, 0);
 
             let iterations = 0;
-            while (unvis.size > 0 && iterations < 100000) {
+            while (heap.size > 0 && iterations < 500000) {
                 iterations++;
-                let cur = null, min = Infinity;
-                for (const id of unvis) if (dist.get(id) < min) { min = dist.get(id); cur = id; }
-                if (cur === null || min === Infinity) {
-                    log(`⚠️ Pathfinding stopped: cur=${cur}, min=${min}, unvisited=${unvis.size}`, 'error');
-                    break;
-                }
+                const { node: cur, priority: curDist } = heap.pop();
+                
+                if (visited.has(cur)) continue;
+                visited.add(cur);
+                
+                // Early termination — found the destination
                 if (cur === eNode) {
-                    log(`✅ Path found after ${iterations} iterations`, 'success');
+                    log(`✅ Path found after ${iterations} iterations (visited ${visited.size}/${graph.nodes.size} nodes)`, 'success');
                     break;
                 }
-                unvis.delete(cur);
-                for (const e of graph.nodes.get(cur).edges) {
-                    if (!unvis.has(e.to)) continue;
-                    const nd = dist.get(cur) + e.distance;
-                    if (nd < dist.get(e.to)) { dist.set(e.to, nd); prev.set(e.to, cur); }
+                
+                const curNode = graph.nodes.get(cur);
+                for (const e of curNode.edges) {
+                    if (visited.has(e.to)) continue;
+                    const nd = curDist + e.distance;
+                    if (!dist.has(e.to) || nd < dist.get(e.to)) {
+                        dist.set(e.to, nd);
+                        prev.set(e.to, cur);
+                        heap.push(e.to, nd);
+                    }
                 }
             }
 
-            if (dist.get(eNode) === Infinity) {
+            if (iterations >= 500000) {
+                log(`⚠️ Hit iteration limit at ${iterations}`, 'error');
+            }
+
+            // Check if end was reached
+            if (!dist.has(eNode) || dist.get(eNode) === undefined) {
                 log(`❌ End node unreachable. Analyzing disconnection...`, 'error');
 
-                const reachableFromStart = new Set();
-                const distFromStart = new Map();
-                const prevFromStart = new Map();
-                const queue = [sNode];
-                reachableFromStart.add(sNode);
-                distFromStart.set(sNode, 0);
+                // Reachable from start = everything we already visited
+                const reachableFromStart = visited;
+                const distFromStart = dist;
+                const prevFromStart = prev;
+                
+                log(`Start network: ${reachableFromStart.size} nodes visited`);
 
-                while (queue.length > 0) {
-                    const node = queue.shift();
-                    for (const edge of graph.nodes.get(node).edges) {
-                        if (!reachableFromStart.has(edge.to)) {
-                            reachableFromStart.add(edge.to);
-                            distFromStart.set(edge.to, distFromStart.get(node) + edge.distance);
-                            prevFromStart.set(edge.to, node);
-                            queue.push(edge.to);
-                        }
-                    }
-                }
-
+                // BFS from end to find its connected component
                 const reachableFromEnd = new Set();
                 const distFromEnd = new Map();
                 const prevFromEnd = new Map();
@@ -1106,13 +1233,28 @@ out center tags;`;
                     }
                 }
 
-                log(`Start connects to ${reachableFromStart.size} nodes, End connects to ${reachableFromEnd.size} nodes`, 'error');
+                log(`End network: ${reachableFromEnd.size} nodes`, 'error');
 
+                // Find closest pair between the two networks
+                // Optimization: sample if networks are very large
                 let closestStartNode = null, closestEndNode = null, minGap = Infinity;
-                for (const sn of reachableFromStart) {
+                
+                const startNodes = Array.from(reachableFromStart);
+                const endNodes = Array.from(reachableFromEnd);
+                
+                // If both networks are huge, sample boundary nodes (those with fewer edges or at extremes)
+                const sampleSize = 2000;
+                const startSample = startNodes.length > sampleSize ? startNodes.filter((_, i) => i % Math.ceil(startNodes.length / sampleSize) === 0) : startNodes;
+                const endSample = endNodes.length > sampleSize ? endNodes.filter((_, i) => i % Math.ceil(endNodes.length / sampleSize) === 0) : endNodes;
+                
+                for (const sn of startSample) {
                     const snData = graph.nodes.get(sn);
-                    for (const en of reachableFromEnd) {
+                    for (const en of endSample) {
                         const enData = graph.nodes.get(en);
+                        // Quick rectangular filter before haversine
+                        const dLat = Math.abs(snData.lat - enData.lat);
+                        const dLon = Math.abs(snData.lon - enData.lon);
+                        if (dLat + dLon > minGap / 50) continue;
                         const gap = haversine(snData.lat, snData.lon, enData.lat, enData.lon);
                         if (gap < minGap) {
                             minGap = gap;
@@ -1122,10 +1264,10 @@ out center tags;`;
                     }
                 }
 
-                log(`Disconnection gap: ${minGap.toFixed(2)} km between nodes ${closestStartNode} and ${closestEndNode}`, 'error');
+                log(`Disconnection gap: ${minGap.toFixed(2)} km`, 'error');
 
-                const distanceFromStation1 = distFromStart.get(closestStartNode) + sDist;
-                const distanceFromStation2 = distFromEnd.get(closestEndNode) + eDist;
+                const distanceFromStation1 = (distFromStart.get(closestStartNode) || 0) + sDist;
+                const distanceFromStation2 = (distFromEnd.get(closestEndNode) || 0) + eDist;
 
                 const partialPathStart = [];
                 let c = closestStartNode;
@@ -1179,37 +1321,79 @@ out center tags;`;
             log(`Coordinates: (${s1.lat.toFixed(4)}, ${s1.lon.toFixed(4)}) → (${s2.lat.toFixed(4)}, ${s2.lon.toFixed(4)})`);
 
             try {
-                // Use larger padding (2°) so indirect routes that go north/south of the 
-                // direct line are captured. For very long routes (>500km straight), use 3°.
-                const straightDist = haversine(s1.lat, s1.lon, s2.lat, s2.lon);
-                const pad = straightDist > 500 ? 3 : 2;
-                log(`Using ${pad}° padding (straight-line distance: ${straightDist.toFixed(0)} km)`);
-                
-                const bbox = [
-                    Math.min(s1.lat, s2.lat) - pad, Math.min(s1.lon, s2.lon) - pad,
-                    Math.max(s1.lat, s2.lat) + pad, Math.max(s1.lon, s2.lon) + pad
-                ];
-                log(`Bbox: [${bbox.map(n => n.toFixed(2)).join(', ')}]`);
+                // ===== LOAD RAILWAY DATA: static first, Overpass fallback =====
+                let railwayElements = [];
 
-                const railQuery = `[out:json][timeout:120][bbox:${bbox.join(',')}];
+                // Determine which countries are relevant to this route
+                const routeCountryKeys = (STATE.staticRailwayKeys || []).filter(key => {
+                    const region = REGIONS[key];
+                    if (!region) return false;
+                    const [s, w, n, e] = region.bbox;
+                    // Include country if either station is inside, or if the bbox overlaps the route corridor
+                    const pad = 2;
+                    const routeS = Math.min(s1.lat, s2.lat) - pad;
+                    const routeN = Math.max(s1.lat, s2.lat) + pad;
+                    const routeW = Math.min(s1.lon, s2.lon) - pad;
+                    const routeE = Math.max(s1.lon, s2.lon) + pad;
+                    return !(n < routeS || s > routeN || e < routeW || w > routeE);
+                });
+
+                let usedStatic = false;
+                if (routeCountryKeys.length > 0) {
+                    log(`📦 Loading static railways for: ${routeCountryKeys.join(', ')}`, 'success');
+                    for (const key of routeCountryKeys) {
+                        const data = await loadStaticJSON(`railways/${key}.json`);
+                        if (data && data.length > 0) {
+                            // Convert compact format [lat, lon] back to {lat, lon} geometry
+                            for (const way of data) {
+                                railwayElements.push({
+                                    geometry: way.geometry.map(p => ({ lat: p[0], lon: p[1] })),
+                                    tags: { railway: way.type }
+                                });
+                            }
+                            log(`  ${REGIONS[key]?.name}: ${data.length} segments`, 'success');
+                        }
+                    }
+                    if (railwayElements.length > 0) {
+                        usedStatic = true;
+                        log(`✅ ${railwayElements.length} railway segments from static data`, 'success');
+                    }
+                }
+
+                // Fallback to Overpass if no static data or static data was empty
+                if (!usedStatic) {
+                    const straightDist = haversine(s1.lat, s1.lon, s2.lat, s2.lon);
+                    const pad = straightDist > 500 ? 3 : 2;
+                    log(`📡 Overpass fallback — ${pad}° padding (straight: ${straightDist.toFixed(0)} km)`);
+                    
+                    const bbox = [
+                        Math.min(s1.lat, s2.lat) - pad, Math.min(s1.lon, s2.lon) - pad,
+                        Math.max(s1.lat, s2.lat) + pad, Math.max(s1.lon, s2.lon) + pad
+                    ];
+                    log(`Bbox: [${bbox.map(n => n.toFixed(2)).join(', ')}]`);
+
+                    const railQuery = `[out:json][timeout:120][bbox:${bbox.join(',')}];
 way["railway"~"rail|narrow_gauge|light_rail|subway|tram|disused|abandoned|preserved|construction|proposed"];
 out geom;`;
-                const resp = await queryOverpass(railQuery);
-                if (!resp.ok) throw new Error('Failed to fetch railways');
-                const data = await resp.json();
-                log(`Found ${data.elements?.length || 0} railway segments`);
+                    const resp = await queryOverpass(railQuery);
+                    if (!resp.ok) throw new Error('Failed to fetch railways');
+                    const data = await resp.json();
+                    railwayElements = data.elements || [];
+                    log(`Found ${railwayElements.length} railway segments from Overpass`);
+                }
 
+                // Log railway types
                 const types = {};
-                data.elements?.forEach(w => {
+                railwayElements.forEach(w => {
                     const type = w.tags?.railway || 'unknown';
                     types[type] = (types[type] || 0) + 1;
                 });
                 log(`Railway types: ${JSON.stringify(types)}`);
 
-                if (!data.elements || data.elements.length === 0) throw new Error('No railways found');
+                if (railwayElements.length === 0) throw new Error('No railways found');
 
                 log('Building graph...');
-                const graph = buildRailwayGraph(data.elements);
+                const graph = buildRailwayGraph(railwayElements);
                 log(`Graph: ${graph.nodes.size} nodes, checking connectivity...`);
 
                 log('Finding path...');
