@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Central Asia & Eurasia Railway Distance and Emissions Calculator</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0f1419;
+            --bg-secondary: #1a2332;
+            --bg-card: #1e2a3a;
+            --bg-card-hover: #243447;
+            --accent: #c8a45c;
+            --accent-glow: rgba(200, 164, 92, 0.15);
+            --accent-dim: #a68942;
+            --text-primary: #e8e2d6;
+            --text-secondary: #9ca8b8;
+            --text-muted: #5e6d80;
+            --border: #2a3a4e;
+            --border-accent: rgba(200, 164, 92, 0.3);
+            --success: #4ade80;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #60a5fa;
+            --purple: #a78bfa;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        /* Subtle texture overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Header */
+        .header {
+            margin-bottom: 2.5rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .header h1 {
+            font-family: 'Instrument Serif', serif;
+            font-size: 2.5rem;
+            font-weight: 400;
+            color: var(--text-primary);
+            letter-spacing: -0.02em;
+            margin-bottom: 0.5rem;
+        }
+
+        .header h1 span {
+            color: var(--accent);
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            max-width: 680px;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            transition: border-color 0.3s;
+        }
+
+        .card:hover {
+            border-color: var(--border-accent);
+        }
+
+        .card-title {
+            font-family: 'Instrument Serif', serif;
+            font-size: 1.25rem;
+            color: var(--accent);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Form elements */
+        label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 0.4rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        select, input[type="text"] {
+            width: 100%;
+            padding: 0.6rem 0.8rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.9rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            outline: none;
+        }
+
+        select:focus, input[type="text"]:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        select[multiple] {
+            min-height: 280px;
+        }
+
+        select option {
+            padding: 0.4rem;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        select optgroup {
+            color: var(--accent);
+            font-weight: 700;
+            font-style: normal;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.7rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            letter-spacing: 0.01em;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: var(--bg-primary);
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-dim);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(200, 164, 92, 0.25);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent);
+            background: var(--bg-card);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+            color: var(--bg-primary);
+            width: 100%;
+            padding: 1rem;
+            font-size: 1rem;
+            letter-spacing: 0.02em;
+        }
+
+        .btn-success:hover {
+            box-shadow: 0 4px 24px rgba(200, 164, 92, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .btn-map {
+            width: 100%;
+            background: var(--bg-secondary);
+            color: var(--accent);
+            border: 1px solid var(--border-accent);
+            padding: 0.6rem;
+        }
+
+        .btn-map:hover {
+            background: var(--accent-glow);
+        }
+
+        /* Grid */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .grid-2 { grid-template-columns: 1fr; }
+            .header h1 { font-size: 1.8rem; }
+        }
+
+        /* Station selection cards */
+        .station-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.25rem;
+        }
+
+        .station-card-title {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--accent);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .station-selected {
+            margin-top: 0.75rem;
+            padding: 0.6rem 0.8rem;
+            background: var(--accent-glow);
+            border: 1px solid var(--border-accent);
+            border-radius: 8px;
+            font-size: 0.85rem;
+            color: var(--text-primary);
+        }
+
+        /* Search */
+        .search-box { position: relative; }
+
+        .search-results {
+            position: absolute;
+            z-index: 1000;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            width: 100%;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }
+
+        .search-result-item {
+            padding: 0.5rem 0.75rem;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            transition: all 0.15s;
+        }
+
+        .search-result-item:hover {
+            background: var(--accent-glow);
+            color: var(--text-primary);
+        }
+
+        /* Status / Debug */
+        .status-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .status-header {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin-bottom: 0.75rem;
+            font-weight: 600;
+        }
+
+        .debug-panel {
+            font-family: 'DM Mono', 'SF Mono', monospace;
+            font-size: 0.72rem;
+            max-height: 250px;
+            overflow-y: auto;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            padding: 0.75rem;
+            border-radius: 8px;
+            color: var(--text-muted);
+        }
+
+        .debug-panel .text-red { color: var(--danger); }
+        .debug-panel .text-green { color: var(--success); }
+        .debug-panel .text-default { color: var(--text-muted); }
+
+        .spinner {
+            border: 2px solid var(--border);
+            border-top: 2px solid var(--accent);
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Map */
+        #map { height: 500px; width: 100%; border-radius: 10px; border: 1px solid var(--border); }
+        #picker-map { height: 400px; width: 100%; border-radius: 10px; }
+
+        .map-section-title {
+            font-family: 'Instrument Serif', serif;
+            font-size: 1.4rem;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+        }
+
+        /* Results */
+        .result-connected {
+            background: var(--bg-card);
+            border: 1px solid var(--border-accent);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .result-disconnected {
+            background: var(--bg-card);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .result-title {
+            font-family: 'Instrument Serif', serif;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .metric-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1rem;
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 0.25rem;
+        }
+
+        .metric-value {
+            font-family: 'Instrument Serif', serif;
+            font-size: 1.6rem;
+            color: var(--accent);
+        }
+
+        .metric-unit {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .metric-card.gap-card { border-color: rgba(239, 68, 68, 0.3); }
+        .metric-card.gap-card .metric-value { color: var(--danger); }
+        .metric-card.origin-card .metric-value { color: var(--info); }
+        .metric-card.dest-card .metric-value { color: var(--purple); }
+
+        .route-note {
+            margin-top: 1rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--border);
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .legend {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 1rem;
+        }
+
+        .legend span { font-weight: 600; }
+
+        .hypo-total {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-left: 3px solid var(--accent);
+            border-radius: 0 8px 8px 0;
+        }
+
+        .hypo-total .metric-value { font-size: 2rem; }
+
+        /* Tip text */
+        .tip {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 0.4rem;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            z-index: 2000;
+            padding: 1.5rem;
+        }
+
+        .modal-content {
+            max-width: 900px;
+            margin: 0 auto;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 1.5rem;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .modal-header h2 {
+            font-family: 'Instrument Serif', serif;
+            font-size: 1.4rem;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            transition: color 0.2s;
+        }
+
+        .modal-close:hover { color: var(--text-primary); }
+
+        /* Spacing helpers */
+        .mb-3 { margin-bottom: 0.75rem; }
+        .mb-4 { margin-bottom: 1rem; }
+        .mt-2 { margin-top: 0.5rem; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-primary); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>Central Asia &amp; Eurasia <span>Railway Calculator</span></h1>
+            <p>Approximate rail distances, shipping times, and carbon emissions for freight rail across the Eurasian corridor — from the Balkans through the Caucasus to Central and South Asia.</p>
+        </div>
+
+        <!-- Region Selection -->
+        <div class="card">
+            <div class="card-title">Select Countries</div>
+            <label>Hold Ctrl / Cmd to select multiple</label>
+            <select id="region" multiple size="14">
+                <optgroup label="Eastern Europe &amp; Balkans">
+                    <option value="romania">Romania</option>
+                    <option value="bulgaria">Bulgaria</option>
+                    <option value="ukraine">Ukraine</option>
+                </optgroup>
+                <optgroup label="Turkey &amp; Caucasus">
+                    <option value="turkey">Turkey</option>
+                    <option value="azerbaijan">Azerbaijan</option>
+                </optgroup>
+                <optgroup label="Russia &amp; Central Asia">
+                    <option value="russia">Russia</option>
+                    <option value="kazakhstan">Kazakhstan</option>
+                    <option value="uzbekistan">Uzbekistan</option>
+                    <option value="turkmenistan">Turkmenistan</option>
+                </optgroup>
+                <optgroup label="South &amp; West Asia">
+                    <option value="iran">Iran</option>
+                    <option value="afghanistan">Afghanistan</option>
+                    <option value="pakistan">Pakistan</option>
+                </optgroup>
+                <optgroup label="Multi-Country Corridors">
+                    <option value="corridor-middle">Middle Corridor (Turkey → Kazakhstan)</option>
+                    <option value="corridor-south">Southern Corridor (Turkey → Pakistan)</option>
+                    <option value="all-regions">All Countries</option>
+                </optgroup>
+            </select>
+            <button onclick="loadRegion()" class="btn btn-primary mt-2" id="load-btn">
+                Load Selected Regions
+            </button>
+            <p class="tip">💡 Select 2–3 countries for faster loading. Multi-country corridors cover wider areas but take longer.</p>
+        </div>
+
+        <!-- Status Display -->
+        <div id="status-panel" class="status-panel" style="display:none;">
+            <div class="status-header">
+                <div class="spinner"></div>
+                <span id="status-text">Loading...</span>
+            </div>
+            <div class="debug-panel" id="debug-log"></div>
+        </div>
+
+        <!-- Station Selection -->
+        <div id="station-panel" style="display:none;">
+            <div class="grid-2">
+                <!-- Station 1 -->
+                <div class="station-card">
+                    <div class="station-card-title">Origin Station</div>
+
+                    <div class="mb-3 search-box">
+                        <label>🔍 Search by name</label>
+                        <input type="text" id="search1" placeholder="Type station name..." oninput="searchStations(1)">
+                        <div id="search-results-1" class="search-results" style="display:none;"></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label>🌍 Filter by country</label>
+                        <select id="country1" onchange="filterByCountry(1)">
+                            <option value="">All countries</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label>📋 Select from list</label>
+                        <select id="station1" size="6" onchange="selectStation(1)"></select>
+                    </div>
+
+                    <button onclick="openMapPicker(1)" class="btn btn-map">🗺️ Pick from Map</button>
+
+                    <div id="selected-station-1" class="station-selected" style="display:none;"></div>
+                </div>
+
+                <!-- Station 2 -->
+                <div class="station-card">
+                    <div class="station-card-title">Destination Station</div>
+
+                    <div class="mb-3 search-box">
+                        <label>🔍 Search by name</label>
+                        <input type="text" id="search2" placeholder="Type station name..." oninput="searchStations(2)">
+                        <div id="search-results-2" class="search-results" style="display:none;"></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label>🌍 Filter by country</label>
+                        <select id="country2" onchange="filterByCountry(2)">
+                            <option value="">All countries</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label>📋 Select from list</label>
+                        <select id="station2" size="6" onchange="selectStation(2)"></select>
+                    </div>
+
+                    <button onclick="openMapPicker(2)" class="btn btn-map">🗺️ Pick from Map</button>
+
+                    <div id="selected-station-2" class="station-selected" style="display:none;"></div>
+                </div>
+            </div>
+
+            <button onclick="calculateRoute()" class="btn btn-success mt-2" id="calc-btn">
+                Calculate Rail Distance &amp; Emissions
+            </button>
+        </div>
+
+        <!-- Results -->
+        <div id="result" style="display:none;"></div>
+
+        <!-- Map -->
+        <div id="map-container" style="display:none;">
+            <div class="map-section-title">Route Map</div>
+            <div id="map"></div>
+        </div>
+    </div>
+
+    <!-- Map Picker Modal -->
+    <div id="map-picker-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="picker-title">Select Station from Map</h2>
+                <button onclick="closeMapPicker()" class="modal-close">&times;</button>
+            </div>
+            <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:1rem;">Click on any station marker to select it</p>
+            <div id="picker-map"></div>
+        </div>
+    </div>
+
+    <script>
+        // ===== STATE =====
+        const STATE = {
+            stations: [],
+            filteredStations: [[], []],
+            selectedStations: [null, null],
+            railwayGraph: null,
+            map: null,
+            pickerMap: null,
+            pickerStationNum: null,
+            towns: [],
+            currentRegion: null
+        };
+
+        const REGIONS = {
+            'turkey':        { name: 'Turkey',        bbox: [35.81, 25.66, 42.11, 44.82], singleCountry: true },
+            'romania':       { name: 'Romania',       bbox: [43.62, 20.26, 48.27, 29.69], singleCountry: true },
+            'ukraine':       { name: 'Ukraine',       bbox: [44.39, 22.14, 52.38, 40.23], singleCountry: true },
+            'russia':        { name: 'Russia',        bbox: [41.19, 27.31, 81.86, 190.0], singleCountry: true },
+            'bulgaria':      { name: 'Bulgaria',      bbox: [41.24, 22.36, 44.22, 28.61], singleCountry: true },
+            'iran':          { name: 'Iran',          bbox: [25.06, 44.05, 39.78, 63.32], singleCountry: true },
+            'afghanistan':   { name: 'Afghanistan',   bbox: [29.38, 60.50, 38.49, 74.89], singleCountry: true },
+            'pakistan':       { name: 'Pakistan',      bbox: [23.69, 60.87, 37.08, 77.84], singleCountry: true },
+            'uzbekistan':    { name: 'Uzbekistan',    bbox: [37.18, 55.99, 45.59, 73.13], singleCountry: true },
+            'turkmenistan':  { name: 'Turkmenistan',  bbox: [35.14, 52.50, 42.80, 66.68], singleCountry: true },
+            'azerbaijan':    { name: 'Azerbaijan',    bbox: [38.39, 44.77, 41.91, 50.63], singleCountry: true },
+            'kazakhstan':    { name: 'Kazakhstan',    bbox: [40.57, 46.49, 55.44, 87.31], singleCountry: true },
+            'corridor-middle': { name: 'Middle Corridor', bbox: [35.81, 25.66, 55.44, 87.31], multi: true },
+            'corridor-south':  { name: 'Southern Corridor', bbox: [23.69, 25.66, 42.80, 77.84], multi: true },
+            'all-regions':     { name: 'All Countries', bbox: [23.69, 20.26, 81.86, 190.0], multi: true }
+        };
+
+        const COUNTRY_DATA = {
+            'Turkey':       { bbox: [35.81, 25.66, 42.11, 44.82], center: [38.96, 35.24] },
+            'Romania':      { bbox: [43.62, 20.26, 48.27, 29.69], center: [45.94, 24.97] },
+            'Ukraine':      { bbox: [44.39, 22.14, 52.38, 40.23], center: [48.38, 31.17] },
+            'Russia':       { bbox: [41.19, 27.31, 81.86, 190.0], center: [55.75, 37.62] },
+            'Bulgaria':     { bbox: [41.24, 22.36, 44.22, 28.61], center: [42.73, 25.49] },
+            'Iran':         { bbox: [25.06, 44.05, 39.78, 63.32], center: [32.43, 53.69] },
+            'Afghanistan':  { bbox: [29.38, 60.50, 38.49, 74.89], center: [33.94, 67.71] },
+            'Pakistan':     { bbox: [23.69, 60.87, 37.08, 77.84], center: [30.38, 69.35] },
+            'Uzbekistan':   { bbox: [37.18, 55.99, 45.59, 73.13], center: [41.31, 64.59] },
+            'Turkmenistan': { bbox: [35.14, 52.50, 42.80, 66.68], center: [38.97, 59.56] },
+            'Azerbaijan':   { bbox: [38.39, 44.77, 41.91, 50.63], center: [40.41, 49.87] },
+            'Kazakhstan':   { bbox: [40.57, 46.49, 55.44, 87.31], center: [48.02, 66.92] }
+        };
+
+        function log(message, type = 'info') {
+            const debugLog = document.getElementById('debug-log');
+            const timestamp = new Date().toLocaleTimeString();
+            const cls = type === 'error' ? 'text-red' : type === 'success' ? 'text-green' : 'text-default';
+            debugLog.innerHTML += `<div class="${cls}">[${timestamp}] ${message}</div>`;
+            debugLog.scrollTop = debugLog.scrollHeight;
+        }
+
+        function showStatus(text) {
+            document.getElementById('status-panel').style.display = 'block';
+            document.getElementById('status-text').textContent = text;
+        }
+
+        function hideStatus() {
+            document.getElementById('status-panel').style.display = 'none';
+        }
+
+        function haversine(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        function getCountryFromData(tags, lat, lon, regionCountry = null) {
+            if (regionCountry) return regionCountry;
+
+            if (tags['addr:country']) {
+                const map = {
+                    'TR': 'Turkey', 'RO': 'Romania', 'UA': 'Ukraine', 'RU': 'Russia',
+                    'BG': 'Bulgaria', 'IR': 'Iran', 'AF': 'Afghanistan', 'PK': 'Pakistan',
+                    'UZ': 'Uzbekistan', 'TM': 'Turkmenistan', 'AZ': 'Azerbaijan', 'KZ': 'Kazakhstan'
+                };
+                if (map[tags['addr:country'].toUpperCase()]) return map[tags['addr:country'].toUpperCase()];
+            }
+            if (tags['is_in:country']) return tags['is_in:country'];
+            if (tags['country']) return tags['country'];
+
+            const fields = [tags['addr:full'], tags['is_in'], tags['name'], tags['addr:city']].filter(f => f).join(' ');
+            for (const country of Object.keys(COUNTRY_DATA)) {
+                if (fields.toLowerCase().includes(country.toLowerCase())) return country;
+            }
+
+            let closest = null, minDist = Infinity;
+            for (const [country, data] of Object.entries(COUNTRY_DATA)) {
+                const [s, w, n, e] = data.bbox;
+                if (lat >= s && lat <= n && lon >= w && lon <= e) {
+                    const dist = haversine(lat, lon, data.center[0], data.center[1]);
+                    if (dist < minDist) { minDist = dist; closest = country; }
+                }
+            }
+            return closest || 'Unknown';
+        }
+
+        function isNearTown(lat, lon, towns, maxDistKm = 10) {
+            return towns.some(t => haversine(lat, lon, t.lat, t.lon) <= maxDistKm);
+        }
+
+        // Overpass API with automatic failover to mirror
+        const OVERPASS_ENDPOINTS = [
+            'https://overpass-api.de/api/interpreter',
+            'https://overpass.kumi.systems/api/interpreter'
+        ];
+
+        async function queryOverpass(query, retries = 2) {
+            for (const endpoint of OVERPASS_ENDPOINTS) {
+                for (let attempt = 0; attempt <= retries; attempt++) {
+                    try {
+                        log(`Querying ${endpoint.includes('kumi') ? 'mirror' : 'primary'} Overpass API${attempt > 0 ? ` (retry ${attempt})` : ''}...`);
+                        const resp = await fetch(endpoint, {
+                            method: 'POST',
+                            body: query
+                        });
+                        if (resp.status === 429) {
+                            const wait = Math.min(5000 * (attempt + 1), 15000);
+                            log(`⚠️ Rate limited (429). Waiting ${wait/1000}s...`, 'error');
+                            await new Promise(r => setTimeout(r, wait));
+                            continue;
+                        }
+                        if (resp.status === 504 || resp.status === 503) {
+                            log(`⚠️ Server ${resp.status}. Trying next endpoint...`, 'error');
+                            break; // try next endpoint
+                        }
+                        return resp;
+                    } catch (e) {
+                        log(`⚠️ Network error: ${e.message}`, 'error');
+                        if (attempt === retries) break; // try next endpoint
+                    }
+                }
+            }
+            throw new Error('All Overpass API endpoints failed. Please wait a minute and try again.');
+        }
+
+        async function loadRegion() {
+            const selectEl = document.getElementById('region');
+            const selectedOptions = Array.from(selectEl.selectedOptions).map(opt => opt.value);
+
+            if (selectedOptions.length === 0) return alert('Please select at least one region');
+
+            let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+            let allSingleCountries = true;
+            let countryNames = [];
+
+            for (const key of selectedOptions) {
+                const region = REGIONS[key];
+                if (!region) continue;
+                const [s, w, n, e] = region.bbox;
+                minLat = Math.min(minLat, s);
+                maxLat = Math.max(maxLat, n);
+                minLon = Math.min(minLon, w);
+                maxLon = Math.max(maxLon, e);
+                if (region.singleCountry) {
+                    countryNames.push(region.name);
+                } else {
+                    allSingleCountries = false;
+                }
+            }
+
+            // Russia is enormous — if selected alone or as part of a combo, limit to the European/Central Asian rail-dense area
+            // to avoid overloading Overpass API
+            if (maxLon > 100) {
+                log('⚠️ Capping eastern longitude to 100° for performance (covers Central Asia rail network)', 'info');
+                maxLon = 100;
+            }
+
+            const combinedBbox = [minLat, minLon, maxLat, maxLon];
+            const regionLabel = selectedOptions.length === 1
+                ? REGIONS[selectedOptions[0]].name
+                : `${selectedOptions.length} regions`;
+
+            showStatus(`Loading ${regionLabel} data...`);
+
+            try {
+                log(`Loading ${regionLabel} (${selectedOptions.join(', ')})`);
+                const bbox = combinedBbox.join(',');
+
+                const singleCountryMode = allSingleCountries && selectedOptions.length > 0;
+                if (singleCountryMode) {
+                    log(`Multi-country mode: ${countryNames.join(', ')}`, 'success');
+                }
+
+                // Load towns
+                try {
+                    const townQuery = `[out:json][timeout:60][bbox:${bbox}];
+(
+  node["place"~"city|town"];
+);
+out;`;
+                    const townResp = await queryOverpass(townQuery);
+                    if (townResp.ok) {
+                        const townData = await townResp.json();
+                        STATE.towns = townData.elements.map(t => ({ lat: t.lat, lon: t.lon, name: t.tags?.name }));
+                        log(`Found ${STATE.towns.length} towns`);
+                    }
+                } catch (e) { log('Town loading failed'); }
+
+                // Load stations
+                const stationQuery = `[out:json][timeout:180][bbox:${bbox}];
+(
+  node["railway"~"station|halt|stop|service_station"];
+  way["railway"~"station|halt|service_station"];
+  node["public_transport"="station"]["train"="yes"];
+  way["public_transport"="station"];
+  way["building"="train_station"];
+  node["name"~"[Ss]tation|[Vv]okzal|[Gg]ar|İstasyon|ایستگاه|вокзал|станция"];
+);
+out center tags;`;
+                const stationResp = await queryOverpass(stationQuery);
+
+                if (!stationResp.ok) throw new Error(`HTTP ${stationResp.status}`);
+                const data = await stationResp.json();
+                log(`✅ Received ${data.elements?.length || 0} elements`, 'success');
+                if (!data.elements || data.elements.length === 0) throw new Error('No stations found');
+
+                const stationMap = new Map();
+                for (const el of data.elements) {
+                    const lat = el.type === 'way' ? el.center?.lat : el.lat;
+                    const lon = el.type === 'way' ? el.center?.lon : el.lon;
+                    if (!lat || !lon) continue;
+
+                    if (el.tags?.building === 'train_station' && STATE.towns.length > 0 && !isNearTown(lat, lon, STATE.towns, 10)) continue;
+
+                    let name = el.tags?.name || el.tags?.['name:en'] || el.tags?.ref;
+
+                    if (!name) {
+                        let closestTown = null;
+                        let minTownDist = Infinity;
+                        for (const town of STATE.towns) {
+                            const d = haversine(lat, lon, town.lat, town.lon);
+                            if (d < minTownDist && d < 5) {
+                                minTownDist = d;
+                                closestTown = town;
+                            }
+                        }
+                        if (closestTown && closestTown.name) {
+                            name = `${closestTown.name} Station`;
+                            log(`Renamed unnamed station to: ${name}`);
+                        } else {
+                            name = `Unnamed (${el.type} ${el.id})`;
+                        }
+                    }
+
+                    const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+
+                    if (!stationMap.has(key) || name.toLowerCase().match(/station|vokzal|gar|istasyon|ایستگاه|вокзал|станция/)) {
+                        let country;
+                        if (singleCountryMode) {
+                            country = null;
+                            for (const regionKey of selectedOptions) {
+                                const region = REGIONS[regionKey];
+                                if (!region || !region.singleCountry) continue;
+                                const [s, w, n, e] = region.bbox;
+                                if (lat >= s && lat <= n && lon >= w && lon <= e) {
+                                    country = region.name;
+                                    break;
+                                }
+                            }
+                            if (!country) country = getCountryFromData(el.tags || {}, lat, lon, null);
+                        } else {
+                            country = getCountryFromData(el.tags || {}, lat, lon, null);
+                        }
+
+                        stationMap.set(key, {
+                            id: el.id, type: el.type, lat, lon, name, country,
+                            tags: el.tags || {}, railwayType: el.tags?.railway || 'station',
+                            displayName: `${name} (${country})`
+                        });
+                    }
+                }
+
+                STATE.stations = Array.from(stationMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+                log(`✅ ${STATE.stations.length} stations processed`, 'success');
+
+                const counts = {};
+                STATE.stations.forEach(s => counts[s.country] = (counts[s.country] || 0) + 1);
+                log(`Countries: ${JSON.stringify(counts)}`, 'success');
+
+                populateCountryFilters();
+                STATE.filteredStations = [STATE.stations, STATE.stations];
+                populateStationLists();
+                hideStatus();
+                document.getElementById('station-panel').style.display = 'block';
+
+            } catch (error) {
+                log(`❌ ${error.message}`, 'error');
+                alert(`Failed: ${error.message}`);
+                hideStatus();
+            }
+        }
+
+        function populateCountryFilters() {
+            const countries = [...new Set(STATE.stations.map(s => s.country))].filter(c => c !== 'Unknown').sort();
+            const html = '<option value="">All countries</option>' + countries.map(c => `<option value="${c}">${c}</option>`).join('');
+            document.getElementById('country1').innerHTML = html;
+            document.getElementById('country2').innerHTML = html;
+        }
+
+        function populateStationLists() {
+            for (let num = 1; num <= 2; num++) {
+                const select = document.getElementById(`station${num}`);
+                select.innerHTML = STATE.filteredStations[num - 1].map((s, i) =>
+                    `<option value="${STATE.stations.indexOf(s)}">${s.displayName}</option>`).join('');
+            }
+        }
+
+        function searchStations(num) {
+            const query = document.getElementById(`search${num}`).value.toLowerCase();
+            const div = document.getElementById(`search-results-${num}`);
+            if (query.length < 2) { div.style.display = 'none'; return; }
+            const matches = STATE.stations.filter(s => s.name.toLowerCase().includes(query)).slice(0, 10);
+            if (matches.length === 0) { div.style.display = 'none'; return; }
+            div.innerHTML = matches.map(s =>
+                `<div class="search-result-item" onclick="selectStationFromSearch(${num}, ${STATE.stations.indexOf(s)})">${s.displayName}</div>`).join('');
+            div.style.display = 'block';
+        }
+
+        function selectStationFromSearch(num, idx) {
+            document.getElementById(`search${num}`).value = '';
+            document.getElementById(`search-results-${num}`).style.display = 'none';
+            setSelectedStation(num, idx);
+        }
+
+        function filterByCountry(num) {
+            const country = document.getElementById(`country${num}`).value;
+            STATE.filteredStations[num - 1] = country ? STATE.stations.filter(s => s.country === country) : STATE.stations;
+            populateStationLists();
+        }
+
+        function selectStation(num) {
+            const val = document.getElementById(`station${num}`).value;
+            if (val) setSelectedStation(num, parseInt(val));
+        }
+
+        function setSelectedStation(num, idx) {
+            STATE.selectedStations[num - 1] = STATE.stations[idx];
+            const s = STATE.stations[idx];
+            document.getElementById(`selected-station-${num}`).innerHTML = `✅ <strong>${s.name}</strong> — ${s.country}`;
+            document.getElementById(`selected-station-${num}`).style.display = 'block';
+            document.getElementById(`station${num}`).value = idx;
+        }
+
+        function openMapPicker(num) {
+            STATE.pickerStationNum = num;
+            document.getElementById('picker-title').textContent = `Select Station ${num}`;
+            document.getElementById('map-picker-modal').style.display = 'block';
+
+            setTimeout(() => {
+                if (!STATE.pickerMap) {
+                    STATE.pickerMap = L.map('picker-map');
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(STATE.pickerMap);
+                }
+                STATE.pickerMap.eachLayer(l => { if (l instanceof L.Marker) STATE.pickerMap.removeLayer(l); });
+                STATE.stations.forEach((s, idx) => {
+                    const m = L.marker([s.lat, s.lon]).addTo(STATE.pickerMap);
+                    m.bindPopup(`<b>${s.name}</b><br>${s.country}`);
+                    m.on('click', () => { setSelectedStation(num, idx); closeMapPicker(); });
+                });
+                STATE.pickerMap.fitBounds(L.latLngBounds(STATE.stations.map(s => [s.lat, s.lon])), { padding: [50, 50] });
+            }, 100);
+        }
+
+        function closeMapPicker() { document.getElementById('map-picker-modal').style.display = 'none'; }
+
+        function buildRailwayGraph(railways) {
+            const graph = { nodes: new Map(), nodeIndex: new Map() };
+            let id = 0;
+            function getNode(lat, lon) {
+                const key = `${lat.toFixed(6)},${lon.toFixed(6)}`;
+                if (graph.nodeIndex.has(key)) return graph.nodeIndex.get(key);
+                const nodeId = id++;
+                graph.nodes.set(nodeId, { lat, lon, edges: [] });
+                graph.nodeIndex.set(key, nodeId);
+                return nodeId;
+            }
+            railways.forEach(w => {
+                if (!w.geometry || w.geometry.length < 2) return;
+                for (let i = 0; i < w.geometry.length - 1; i++) {
+                    const p1 = w.geometry[i], p2 = w.geometry[i + 1];
+                    const n1 = getNode(p1.lat, p1.lon), n2 = getNode(p2.lat, p2.lon);
+                    const d = haversine(p1.lat, p1.lon, p2.lat, p2.lon);
+                    graph.nodes.get(n1).edges.push({ to: n2, distance: d });
+                    graph.nodes.get(n2).edges.push({ to: n1, distance: d });
+                }
+            });
+            return graph;
+        }
+
+        function findShortestPath(graph, sLat, sLon, eLat, eLon) {
+            let sNode = null, eNode = null, sDist = Infinity, eDist = Infinity;
+            for (const [id, n] of graph.nodes) {
+                const ds = haversine(sLat, sLon, n.lat, n.lon), de = haversine(eLat, eLon, n.lat, n.lon);
+                if (ds < sDist) { sDist = ds; sNode = id; }
+                if (de < eDist) { eDist = de; eNode = id; }
+            }
+            if (!sNode || !eNode) throw new Error('No railway nodes near stations');
+
+            log(`Closest railway nodes: start=${sNode} (${sDist.toFixed(3)}km away), end=${eNode} (${eDist.toFixed(3)}km away)`);
+
+            const dist = new Map(), prev = new Map(), unvis = new Set(graph.nodes.keys());
+            for (const id of graph.nodes.keys()) dist.set(id, Infinity);
+            dist.set(sNode, 0);
+
+            let iterations = 0;
+            while (unvis.size > 0 && iterations < 100000) {
+                iterations++;
+                let cur = null, min = Infinity;
+                for (const id of unvis) if (dist.get(id) < min) { min = dist.get(id); cur = id; }
+                if (cur === null || min === Infinity) {
+                    log(`⚠️ Pathfinding stopped: cur=${cur}, min=${min}, unvisited=${unvis.size}`, 'error');
+                    break;
+                }
+                if (cur === eNode) {
+                    log(`✅ Path found after ${iterations} iterations`, 'success');
+                    break;
+                }
+                unvis.delete(cur);
+                for (const e of graph.nodes.get(cur).edges) {
+                    if (!unvis.has(e.to)) continue;
+                    const nd = dist.get(cur) + e.distance;
+                    if (nd < dist.get(e.to)) { dist.set(e.to, nd); prev.set(e.to, cur); }
+                }
+            }
+
+            if (dist.get(eNode) === Infinity) {
+                log(`❌ End node unreachable. Analyzing disconnection...`, 'error');
+
+                const reachableFromStart = new Set();
+                const distFromStart = new Map();
+                const prevFromStart = new Map();
+                const queue = [sNode];
+                reachableFromStart.add(sNode);
+                distFromStart.set(sNode, 0);
+
+                while (queue.length > 0) {
+                    const node = queue.shift();
+                    for (const edge of graph.nodes.get(node).edges) {
+                        if (!reachableFromStart.has(edge.to)) {
+                            reachableFromStart.add(edge.to);
+                            distFromStart.set(edge.to, distFromStart.get(node) + edge.distance);
+                            prevFromStart.set(edge.to, node);
+                            queue.push(edge.to);
+                        }
+                    }
+                }
+
+                const reachableFromEnd = new Set();
+                const distFromEnd = new Map();
+                const prevFromEnd = new Map();
+                const queue2 = [eNode];
+                reachableFromEnd.add(eNode);
+                distFromEnd.set(eNode, 0);
+
+                while (queue2.length > 0) {
+                    const node = queue2.shift();
+                    for (const edge of graph.nodes.get(node).edges) {
+                        if (!reachableFromEnd.has(edge.to)) {
+                            reachableFromEnd.add(edge.to);
+                            distFromEnd.set(edge.to, distFromEnd.get(node) + edge.distance);
+                            prevFromEnd.set(edge.to, node);
+                            queue2.push(edge.to);
+                        }
+                    }
+                }
+
+                log(`Start connects to ${reachableFromStart.size} nodes, End connects to ${reachableFromEnd.size} nodes`, 'error');
+
+                let closestStartNode = null, closestEndNode = null, minGap = Infinity;
+                for (const sn of reachableFromStart) {
+                    const snData = graph.nodes.get(sn);
+                    for (const en of reachableFromEnd) {
+                        const enData = graph.nodes.get(en);
+                        const gap = haversine(snData.lat, snData.lon, enData.lat, enData.lon);
+                        if (gap < minGap) {
+                            minGap = gap;
+                            closestStartNode = sn;
+                            closestEndNode = en;
+                        }
+                    }
+                }
+
+                log(`Disconnection gap: ${minGap.toFixed(2)} km between nodes ${closestStartNode} and ${closestEndNode}`, 'error');
+
+                const distanceFromStation1 = distFromStart.get(closestStartNode) + sDist;
+                const distanceFromStation2 = distFromEnd.get(closestEndNode) + eDist;
+
+                const partialPathStart = [];
+                let c = closestStartNode;
+                while (c !== undefined && c !== sNode) {
+                    partialPathStart.unshift({ lat: graph.nodes.get(c).lat, lon: graph.nodes.get(c).lon });
+                    c = prevFromStart.get(c);
+                }
+                if (c === sNode) partialPathStart.unshift({ lat: graph.nodes.get(sNode).lat, lon: graph.nodes.get(sNode).lon });
+
+                const partialPathEnd = [];
+                let c2 = closestEndNode;
+                while (c2 !== undefined && c2 !== eNode) {
+                    partialPathEnd.unshift({ lat: graph.nodes.get(c2).lat, lon: graph.nodes.get(c2).lon });
+                    c2 = prevFromEnd.get(c2);
+                }
+                if (c2 === eNode) partialPathEnd.unshift({ lat: graph.nodes.get(eNode).lat, lon: graph.nodes.get(eNode).lon });
+
+                return {
+                    pathFromStart: partialPathStart,
+                    pathFromEnd: partialPathEnd,
+                    distance: Infinity,
+                    disconnected: true,
+                    disconnectionGap: minGap,
+                    breakPoint1: graph.nodes.get(closestStartNode),
+                    breakPoint2: graph.nodes.get(closestEndNode),
+                    startNetworkSize: reachableFromStart.size,
+                    endNetworkSize: reachableFromEnd.size,
+                    distanceFromStation1,
+                    distanceFromStation2
+                };
+            }
+
+            const path = [];
+            let c = eNode;
+            while (c !== undefined) {
+                path.unshift({ lat: graph.nodes.get(c).lat, lon: graph.nodes.get(c).lon });
+                c = prev.get(c);
+            }
+            if (path.length === 0) throw new Error('No path found');
+            log(`Path contains ${path.length} segments`);
+            return { path, distance: dist.get(eNode) + sDist + eDist, disconnected: false };
+        }
+
+        async function calculateRoute() {
+            const s1 = STATE.selectedStations[0], s2 = STATE.selectedStations[1];
+            if (!s1 || !s2) return alert('Select both stations');
+            if (s1 === s2) return alert('Select different stations');
+
+            showStatus('Calculating...');
+            log(`Route: ${s1.name} → ${s2.name}`);
+            log(`Coordinates: (${s1.lat.toFixed(4)}, ${s1.lon.toFixed(4)}) → (${s2.lat.toFixed(4)}, ${s2.lon.toFixed(4)})`);
+
+            try {
+                // Use larger padding (2°) so indirect routes that go north/south of the 
+                // direct line are captured. For very long routes (>500km straight), use 3°.
+                const straightDist = haversine(s1.lat, s1.lon, s2.lat, s2.lon);
+                const pad = straightDist > 500 ? 3 : 2;
+                log(`Using ${pad}° padding (straight-line distance: ${straightDist.toFixed(0)} km)`);
+                
+                const bbox = [
+                    Math.min(s1.lat, s2.lat) - pad, Math.min(s1.lon, s2.lon) - pad,
+                    Math.max(s1.lat, s2.lat) + pad, Math.max(s1.lon, s2.lon) + pad
+                ];
+                log(`Bbox: [${bbox.map(n => n.toFixed(2)).join(', ')}]`);
+
+                const railQuery = `[out:json][timeout:120][bbox:${bbox.join(',')}];
+way["railway"~"rail|narrow_gauge|light_rail|subway|tram|disused|abandoned|preserved|construction|proposed"];
+out geom;`;
+                const resp = await queryOverpass(railQuery);
+                if (!resp.ok) throw new Error('Failed to fetch railways');
+                const data = await resp.json();
+                log(`Found ${data.elements?.length || 0} railway segments`);
+
+                const types = {};
+                data.elements?.forEach(w => {
+                    const type = w.tags?.railway || 'unknown';
+                    types[type] = (types[type] || 0) + 1;
+                });
+                log(`Railway types: ${JSON.stringify(types)}`);
+
+                if (!data.elements || data.elements.length === 0) throw new Error('No railways found');
+
+                log('Building graph...');
+                const graph = buildRailwayGraph(data.elements);
+                log(`Graph: ${graph.nodes.size} nodes, checking connectivity...`);
+
+                log('Finding path...');
+                const result = findShortestPath(graph, s1.lat, s1.lon, s2.lat, s2.lon);
+
+                if (result.disconnected) {
+                    log(`⚠️ Railway disconnected! Gap: ${result.disconnectionGap.toFixed(2)} km`, 'error');
+
+                    log('Checking for rivers/features at break point...');
+                    const breakReason = await analyzeBreakPoint(result.breakPoint1, result.breakPoint2);
+
+                    const hypotheticalTotal = result.distanceFromStation1 + result.distanceFromStation2 + result.disconnectionGap;
+
+                    document.getElementById('result').innerHTML = `
+                        <div class="result-disconnected">
+                            <div class="result-title" style="color: var(--warning);">⚠️ Railway Disconnected</div>
+                            <p style="color: var(--text-secondary); margin-bottom: 1rem;">The railway network between <strong>${s1.name}</strong> and <strong>${s2.name}</strong> is not connected.</p>
+
+                            <div class="metric-grid">
+                                <div class="metric-card origin-card">
+                                    <div class="metric-label">From ${s1.name}</div>
+                                    <div class="metric-value">${result.distanceFromStation1.toFixed(2)}</div>
+                                    <div class="metric-unit">km to break point</div>
+                                </div>
+                                <div class="metric-card gap-card">
+                                    <div class="metric-label">Missing Gap</div>
+                                    <div class="metric-value">${result.disconnectionGap.toFixed(2)}</div>
+                                    <div class="metric-unit">km — ${breakReason}</div>
+                                </div>
+                                <div class="metric-card dest-card">
+                                    <div class="metric-label">From ${s2.name}</div>
+                                    <div class="metric-value">${result.distanceFromStation2.toFixed(2)}</div>
+                                    <div class="metric-unit">km to break point</div>
+                                </div>
+                            </div>
+
+                            <div class="hypo-total">
+                                <div class="metric-label">Hypothetical Total Distance (if connected)</div>
+                                <div class="metric-value">${hypotheticalTotal.toFixed(2)} <span class="metric-unit">km</span></div>
+                                <div class="metric-unit">${result.distanceFromStation1.toFixed(1)} km + ${result.disconnectionGap.toFixed(1)} km gap + ${result.distanceFromStation2.toFixed(1)} km</div>
+                            </div>
+
+                            <div class="legend">
+                                <span style="color: var(--info);">Blue line</span> = Railway from ${s1.name} •
+                                <span style="color: var(--danger);">Red dashed</span> = Missing connection •
+                                <span style="color: var(--purple);">Purple line</span> = Railway from ${s2.name}
+                            </div>
+                        </div>`;
+                    document.getElementById('result').style.display = 'block';
+
+                    showDisconnectedMap(s1, s2, result, breakReason);
+                    hideStatus();
+                    return;
+                }
+
+                if (!isFinite(result.distance)) {
+                    hideStatus();
+                    log('❌ Distance is infinite', 'error');
+                    return alert('Route not possible. Rail lines may not be connected.');
+                }
+
+                const dist = result.distance, straight = haversine(s1.lat, s1.lon, s2.lat, s2.lon);
+                const travel = dist / 35, shipment = (travel * 3) / 24, co2 = dist * 0.024278;
+
+                log(`✅ Route found: ${dist.toFixed(2)} km`, 'success');
+
+                document.getElementById('result').innerHTML = `
+                    <div class="result-connected">
+                        <div class="result-title" style="color: var(--success);">✅ Route Analysis</div>
+                        <p style="color: var(--text-secondary); margin-bottom: 0.5rem;"><strong>${s1.name}</strong>, ${s1.country} → <strong>${s2.name}</strong>, ${s2.country}</p>
+
+                        <div class="metric-grid">
+                            <div class="metric-card">
+                                <div class="metric-label">Railway Distance</div>
+                                <div class="metric-value">${dist.toFixed(2)}</div>
+                                <div class="metric-unit">km</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-label">Approx. Travel Time</div>
+                                <div class="metric-value">${travel.toFixed(1)}</div>
+                                <div class="metric-unit">hours (at 35 km/h)</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-label">Approx. Shipment Time</div>
+                                <div class="metric-value">${shipment.toFixed(1)}</div>
+                                <div class="metric-unit">days (3× travel time)</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-label">CO₂e per Metric Ton</div>
+                                <div class="metric-value">${co2.toFixed(2)}</div>
+                                <div class="metric-unit">kgCO₂e</div>
+                            </div>
+                        </div>
+
+                        <div class="route-note">Straight-line distance: ${straight.toFixed(2)} km — rail route is ${((dist/straight - 1) * 100).toFixed(0)}% longer</div>
+                    </div>`;
+                document.getElementById('result').style.display = 'block';
+
+                showMap(s1, s2, result.path);
+                hideStatus();
+            } catch (error) {
+                log(`❌ ${error.message}`, 'error');
+                hideStatus();
+                alert('Route not possible. Rail lines may not be connected. Check the debug log for details.');
+            }
+        }
+
+        async function analyzeBreakPoint(bp1, bp2) {
+            try {
+                const midLat = (bp1.lat + bp2.lat) / 2;
+                const midLon = (bp1.lon + bp2.lon) / 2;
+                const searchRadius = Math.max(0.01, Math.min(0.05, haversine(bp1.lat, bp1.lon, bp2.lat, bp2.lon) / 2));
+
+                const query = `[out:json][timeout:15];
+(
+  way(around:${searchRadius * 111000},${midLat},${midLon})["waterway"~"river|canal"];
+  way(around:${searchRadius * 111000},${midLat},${midLon})["natural"="water"];
+  relation(around:${searchRadius * 111000},${midLat},${midLon})["waterway"="river"];
+);
+out tags;`;
+
+                const resp = await queryOverpass(query);
+
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data.elements && data.elements.length > 0) {
+                        const waterFeatures = data.elements.filter(e => e.tags.waterway || e.tags.natural === 'water');
+                        if (waterFeatures.length > 0) {
+                            const riverName = waterFeatures[0].tags.name || 'unnamed river';
+                            log(`🌊 River detected at break: ${riverName}`, 'success');
+                            return `River crossing: ${riverName}`;
+                        }
+                    }
+                }
+
+                const countries1 = getCountryFromData({}, bp1.lat, bp1.lon, null);
+                const countries2 = getCountryFromData({}, bp2.lat, bp2.lon, null);
+                if (countries1 !== countries2) {
+                    log(`🗺️ International border detected: ${countries1}/${countries2}`, 'success');
+                    return `Border crossing: ${countries1}↔${countries2}`;
+                }
+
+                return 'Unknown obstruction';
+            } catch (e) {
+                log(`Failed to analyze break point: ${e.message}`);
+                return 'Analysis unavailable';
+            }
+        }
+
+        function showDisconnectedMap(s1, s2, result, breakReason) {
+            document.getElementById('map-container').style.display = 'block';
+            if (!STATE.map) {
+                STATE.map = L.map('map');
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(STATE.map);
+            }
+            STATE.map.eachLayer(l => { if (l instanceof L.Marker || l instanceof L.Polyline) STATE.map.removeLayer(l); });
+
+            L.marker([s1.lat, s1.lon])
+                .bindPopup(`<b>ORIGIN:</b><br>${s1.name}<br><small>${result.distanceFromStation1.toFixed(2)} km to break</small>`)
+                .addTo(STATE.map);
+            L.marker([s2.lat, s2.lon])
+                .bindPopup(`<b>DESTINATION:</b><br>${s2.name}<br><small>${result.distanceFromStation2.toFixed(2)} km to break</small>`)
+                .addTo(STATE.map);
+
+            if (result.pathFromStart && result.pathFromStart.length > 0) {
+                L.polyline(result.pathFromStart.map(p => [p.lat, p.lon]), {
+                    color: '#60a5fa', weight: 5, opacity: 0.7
+                }).bindPopup(`Railway from ${s1.name}<br>${result.distanceFromStation1.toFixed(2)} km`).addTo(STATE.map);
+            }
+
+            if (result.pathFromEnd && result.pathFromEnd.length > 0) {
+                L.polyline(result.pathFromEnd.map(p => [p.lat, p.lon]), {
+                    color: '#a78bfa', weight: 5, opacity: 0.7
+                }).bindPopup(`Railway from ${s2.name}<br>${result.distanceFromStation2.toFixed(2)} km`).addTo(STATE.map);
+            }
+
+            if (result.breakPoint1 && result.breakPoint2) {
+                const brokenChainIcon = L.divIcon({
+                    html: `<div style="font-size: 28px; text-align: center; line-height: 1;">⛓️‍💥</div>`,
+                    className: '',
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14]
+                });
+
+                L.marker([result.breakPoint1.lat, result.breakPoint1.lon], { icon: brokenChainIcon })
+                    .bindPopup(`<b>🔗 Railway End (from ${s1.name})</b><br>Gap: ${result.disconnectionGap.toFixed(2)} km<br>Reason: ${breakReason}`)
+                    .addTo(STATE.map).openPopup();
+
+                L.polyline([
+                    [result.breakPoint1.lat, result.breakPoint1.lon],
+                    [result.breakPoint2.lat, result.breakPoint2.lon]
+                ], { color: '#ef4444', weight: 3, opacity: 0.8, dashArray: '5, 10' })
+                    .bindPopup(`<b>Missing Connection</b><br>${result.disconnectionGap.toFixed(2)} km gap<br>${breakReason}`).addTo(STATE.map);
+
+                L.marker([result.breakPoint2.lat, result.breakPoint2.lon], { icon: brokenChainIcon })
+                    .bindPopup(`<b>🔗 Railway End (from ${s2.name})</b><br>Distance: ${result.distanceFromStation2.toFixed(2)} km`)
+                    .addTo(STATE.map);
+            }
+
+            const bounds = L.latLngBounds([[s1.lat, s1.lon], [s2.lat, s2.lon]]);
+            if (result.breakPoint1) bounds.extend([result.breakPoint1.lat, result.breakPoint1.lon]);
+            if (result.breakPoint2) bounds.extend([result.breakPoint2.lat, result.breakPoint2.lon]);
+            STATE.map.fitBounds(bounds, { padding: [50, 50] });
+        }
+
+        function showMap(s1, s2, path) {
+            document.getElementById('map-container').style.display = 'block';
+            if (!STATE.map) {
+                STATE.map = L.map('map');
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(STATE.map);
+            }
+            STATE.map.eachLayer(l => { if (l instanceof L.Marker || l instanceof L.Polyline) STATE.map.removeLayer(l); });
+            L.marker([s1.lat, s1.lon]).bindPopup(`<b>ORIGIN:</b><br>${s1.name}`).addTo(STATE.map).openPopup();
+            L.marker([s2.lat, s2.lon]).bindPopup(`<b>DESTINATION:</b><br>${s2.name}`).addTo(STATE.map);
+            L.polyline(path.map(p => [p.lat, p.lon]), { color: '#c8a45c', weight: 4, opacity: 0.9 }).addTo(STATE.map);
+            STATE.map.fitBounds(L.latLngBounds(path.map(p => [p.lat, p.lon])), { padding: [50, 50] });
+        }
+
+        document.addEventListener('click', e => {
+            if (!e.target.closest('.search-box')) {
+                document.getElementById('search-results-1').style.display = 'none';
+                document.getElementById('search-results-2').style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
