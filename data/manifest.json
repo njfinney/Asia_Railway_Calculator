@@ -1,0 +1,21 @@
+{
+  "generated": "2026-02-26T15:16:50.099Z",
+  "countries": {
+    "russia": {
+      "stations": 9951,
+      "stationFileKB": 936,
+      "stationsExtracted": "2026-02-26T14:39:25.015Z",
+      "name": "Russia",
+      "code": "RU",
+      "bbox": [
+        41.19,
+        27.31,
+        70,
+        100
+      ],
+      "railwaySegments": 321898,
+      "railwayFileKB": 85958,
+      "railwaysExtracted": "2026-02-26T15:16:22.618Z"
+    }
+  }
+}
