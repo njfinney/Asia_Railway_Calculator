@@ -1112,9 +1112,9 @@
             const graph = { nodes: new Map(), nodeIndex: new Map() };
             let id = 0;
             
-            // Use reduced precision (5 decimal places ≈ 1.1m) to merge nearby nodes
+            // Use 4 decimal places (~11m) to merge nearby nodes — helps with border connections
             function getNode(lat, lon) {
-                const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+                const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
                 if (graph.nodeIndex.has(key)) return graph.nodeIndex.get(key);
                 const nodeId = id++;
                 graph.nodes.set(nodeId, { lat, lon, edges: [] });
@@ -1126,10 +1126,17 @@
                 for (let i = 0; i < w.geometry.length - 1; i++) {
                     const p1 = w.geometry[i], p2 = w.geometry[i + 1];
                     const n1 = getNode(p1.lat, p1.lon), n2 = getNode(p2.lat, p2.lon);
-                    if (n1 === n2) continue; // skip zero-length edges from merging
+                    if (n1 === n2) continue; // skip self-loops from merging
                     const d = haversine(p1.lat, p1.lon, p2.lat, p2.lon);
-                    graph.nodes.get(n1).edges.push({ to: n2, distance: d });
-                    graph.nodes.get(n2).edges.push({ to: n1, distance: d });
+                    // Prevent duplicate edges
+                    const node1 = graph.nodes.get(n1);
+                    const node2 = graph.nodes.get(n2);
+                    if (!node1.edges.some(e => e.to === n2)) {
+                        node1.edges.push({ to: n2, distance: d });
+                    }
+                    if (!node2.edges.some(e => e.to === n1)) {
+                        node2.edges.push({ to: n1, distance: d });
+                    }
                 }
             });
             return graph;
@@ -1360,11 +1367,16 @@
                     }
                 }
 
-                // Fallback to Overpass if no static data or static data was empty
-                if (!usedStatic) {
+                // If static data is sparse (<50 segments) or missing, supplement with Overpass
+                // Merges with existing data rather than replacing
+                if (!usedStatic || railwayElements.length < 50) {
                     const straightDist = haversine(s1.lat, s1.lon, s2.lat, s2.lon);
-                    const pad = straightDist > 500 ? 3 : 2;
-                    log(`📡 Overpass fallback — ${pad}° padding (straight: ${straightDist.toFixed(0)} km)`);
+                    const straightDeg = Math.max(
+                        Math.abs(s1.lat - s2.lat),
+                        Math.abs(s1.lon - s2.lon)
+                    );
+                    const pad = Math.max(2, straightDeg * 0.3);
+                    log(`📡 ${usedStatic ? 'Supplementing static data' : 'Overpass fallback'} — ${pad.toFixed(1)}° padding (straight: ${straightDist.toFixed(0)} km)`);
                     
                     const bbox = [
                         Math.min(s1.lat, s2.lat) - pad, Math.min(s1.lon, s2.lon) - pad,
@@ -1375,11 +1387,23 @@
                     const railQuery = `[out:json][timeout:120][bbox:${bbox.join(',')}];
 way["railway"~"rail|narrow_gauge|light_rail|subway|tram|disused|abandoned|preserved|construction|proposed"];
 out geom;`;
-                    const resp = await queryOverpass(railQuery);
-                    if (!resp.ok) throw new Error('Failed to fetch railways');
-                    const data = await resp.json();
-                    railwayElements = data.elements || [];
-                    log(`Found ${railwayElements.length} railway segments from Overpass`);
+                    try {
+                        const resp = await queryOverpass(railQuery);
+                        if (resp.ok) {
+                            const data = await resp.json();
+                            const overpassElements = data.elements || [];
+                            log(`Found ${overpassElements.length} railway segments from Overpass`);
+                            // Merge: graph builder handles node dedup via coordinate rounding
+                            railwayElements.push(...overpassElements);
+                            log(`Total after merge: ${railwayElements.length} segments`);
+                        }
+                    } catch (e) {
+                        if (railwayElements.length > 0) {
+                            log(`⚠️ Overpass supplement failed, continuing with static data only`, 'error');
+                        } else {
+                            throw new Error('Failed to fetch railways from any source');
+                        }
+                    }
                 }
 
                 // Log railway types
