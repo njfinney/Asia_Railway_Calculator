@@ -1,5 +1,5 @@
 {
-  "generated": "2026-03-01T05:11:57.705Z",
+  "generated": "2026-04-01T06:11:30.613Z",
   "countries": {
     "turkey": {
       "name": "Turkey",
@@ -40,12 +40,12 @@
         70,
         100
       ],
-      "stations": 9955,
+      "stations": 9952,
       "stationFileKB": 936,
-      "stationsExtracted": "2026-03-01T04:51:44.516Z",
-      "railwaySegments": 322428,
-      "railwayFileKB": 86049,
-      "railwaysExtracted": "2026-03-01T05:11:23.182Z"
+      "stationsExtracted": "2026-04-01T05:23:35.224Z",
+      "railwaySegments": 322688,
+      "railwayFileKB": 86121,
+      "railwaysExtracted": "2026-04-01T06:10:51.176Z"
     },
     "bulgaria": {
       "name": "Bulgaria",
