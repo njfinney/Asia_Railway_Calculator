@@ -1,5 +1,5 @@
 {
-  "generated": "2026-06-01T10:02:40.716Z",
+  "generated": "2026-07-01T08:39:12.974Z",
   "countries": {
     "turkey": {
       "name": "Turkey",
@@ -12,10 +12,10 @@
       ],
       "stations": 0,
       "stationFileKB": 0,
-      "stationsExtracted": "2026-06-01T08:38:06.112Z",
+      "stationsExtracted": "2026-07-01T07:15:40.211Z",
       "railwaySegments": 0,
       "railwayFileKB": 0,
-      "railwaysExtracted": "2026-06-01T08:59:08.134Z"
+      "railwaysExtracted": "2026-07-01T07:42:27.029Z"
     },
     "romania": {
       "name": "Romania",
@@ -26,12 +26,12 @@
         48.27,
         29.69
       ],
-      "stations": 0,
-      "stationFileKB": 0,
-      "stationsExtracted": "2026-06-01T08:34:14.415Z",
+      "stations": 1786,
+      "stationFileKB": 153,
+      "stationsExtracted": "2026-07-01T07:11:50.309Z",
       "railwaySegments": 0,
       "railwayFileKB": 0,
-      "railwaysExtracted": "2026-06-01T08:41:45.370Z"
+      "railwaysExtracted": "2026-07-01T07:22:04.896Z"
     },
     "ukraine": {
       "name": "Ukraine",
@@ -110,10 +110,10 @@
       ],
       "stations": 0,
       "stationFileKB": 0,
-      "stationsExtracted": "2026-06-01T08:36:10.348Z",
+      "stationsExtracted": "2026-07-01T07:13:45.234Z",
       "railwaySegments": 0,
       "railwayFileKB": 0,
-      "railwaysExtracted": "2026-06-01T08:53:20.635Z"
+      "railwaysExtracted": "2026-07-01T07:36:41.138Z"
     },
     "turkmenistan": {
       "name": "Turkmenistan",
