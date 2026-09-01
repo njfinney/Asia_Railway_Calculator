@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-01T07:22:32.858Z",
+  "generated": "2026-09-01T09:46:44.921Z",
   "countries": {
     "turkey": {
       "name": "Turkey",
@@ -41,7 +41,13 @@
         22.14,
         52.38,
         40.23
-      ]
+      ],
+      "stations": 0,
+      "stationFileKB": 0,
+      "stationsExtracted": "2026-09-01T08:18:11.051Z",
+      "railwaySegments": 0,
+      "railwayFileKB": 0,
+      "railwaysExtracted": "2026-09-01T08:49:10.943Z"
     },
     "russia": {
       "name": "Russia",
@@ -77,7 +83,13 @@
         44.05,
         39.78,
         63.32
-      ]
+      ],
+      "stations": 0,
+      "stationFileKB": 0,
+      "stationsExtracted": "2026-09-01T08:17:20.615Z",
+      "railwaySegments": 0,
+      "railwayFileKB": 0,
+      "railwaysExtracted": "2026-09-01T08:30:55.586Z"
     },
     "afghanistan": {
       "name": "Afghanistan",
@@ -97,7 +109,13 @@
         60.87,
         37.08,
         77.84
-      ]
+      ],
+      "stations": 0,
+      "stationFileKB": 0,
+      "stationsExtracted": "2026-09-01T08:17:48.194Z",
+      "railwaySegments": 0,
+      "railwayFileKB": 0,
+      "railwaysExtracted": "2026-09-01T08:39:37.524Z"
     },
     "uzbekistan": {
       "name": "Uzbekistan",
@@ -143,7 +161,13 @@
         46.49,
         55.44,
         87.31
-      ]
+      ],
+      "stations": 0,
+      "stationFileKB": 0,
+      "stationsExtracted": "2026-09-01T08:18:36.966Z",
+      "railwaySegments": 0,
+      "railwayFileKB": 0,
+      "railwaysExtracted": "2026-09-01T09:09:54.109Z"
     }
   }
 }
